@@ -52,6 +52,7 @@ from src.card_logic import (
     copy_pack_to_clipboard,
 )
 from src.signals import SignalCalculator
+from src.ml_rating import MLModelManager, MLRatingCalculator, is_ml_rating_available
 
 try:
     import win32api
@@ -448,6 +449,7 @@ class Overlay(ScaledWindow):
         self.refresh_button_checkbox_value = tkinter.IntVar(self.root)
         self.update_notifications_checkbox_value = tkinter.IntVar(self.root)
         self.missing_notifications_checkbox_value = tkinter.IntVar(self.root)
+        self.ml_rating_checkbox_value = tkinter.IntVar(self.root)
 
         self.taken_type_creature_checkbox_value = tkinter.IntVar(self.root)
         self.taken_type_creature_checkbox_value.set(True)
@@ -498,6 +500,7 @@ class Overlay(ScaledWindow):
         self.column_5_options = None
         self.column_6_options = None
         self.column_7_options = None
+        self.ml_dir_entry = None
         self.taken_table = None
         self.compare_table = None
         self.compare_list = None
@@ -739,6 +742,13 @@ class Overlay(ScaledWindow):
                 self.__update_event_files_callback,
             ),
         )
+
+        # Initialize ML Rating components
+        self.ml_model_manager = MLModelManager(
+            self.configuration.settings.ml_model_directory
+        )
+        self.ml_calculator = MLRatingCalculator(self.ml_model_manager)
+
         if self.notifications.check_for_updates():
             self.__arena_log_check()
             self.__control_trace(True)
@@ -960,11 +970,35 @@ class Overlay(ScaledWindow):
     def __update_pack_table(self, card_list, filtered_colors, fields):
         """Update the table that lists the cards within the current pack"""
         try:
+            # Compute ML ratings if enabled
+            ml_calc = None
+            if (
+                self.configuration.settings.ml_rating_enabled
+                and constants.DATA_FIELD_ML_RATING in fields.values()
+            ):
+                event_set, event_type = self.draft.retrieve_current_limited_event()
+                if event_set:
+                    # Get pool card names from taken cards
+                    taken_cards = self.draft.retrieve_taken_cards()
+                    pool_names = [
+                        card.get(constants.DATA_FIELD_NAME, "")
+                        for card in taken_cards
+                        if card.get(constants.DATA_FIELD_NAME)
+                    ]
+                    # Determine draft mode
+                    mode = "Premier"
+                    if "PickTwo" in (event_type or ""):
+                        mode = "PickTwo"
+                    # Compute ratings
+                    self.ml_calculator.compute_ratings(pool_names, event_set, mode)
+                    ml_calc = self.ml_calculator
+
             result_class = CardResult(
                 self.set_metrics,
                 self.tier_data,
                 self.configuration,
                 self.draft.current_pick,
+                ml_calculator=ml_calc,
             )
             result_list = result_class.return_results(
                 card_list, filtered_colors, fields.values()
@@ -1058,11 +1092,21 @@ class Overlay(ScaledWindow):
                     self.missing_table.config(height=0)
 
                 if list_length:
+                    # Use ML calculator if ratings were computed for this pack
+                    ml_calc = None
+                    if (
+                        self.configuration.settings.ml_rating_enabled
+                        and constants.DATA_FIELD_ML_RATING in fields.values()
+                        and self.ml_calculator.has_ratings()
+                    ):
+                        ml_calc = self.ml_calculator
+
                     result_class = CardResult(
                         self.set_metrics,
                         self.tier_data,
                         self.configuration,
                         self.draft.current_pick,
+                        ml_calculator=ml_calc,
                     )
                     result_list = result_class.return_results(
                         missing_cards, filtered_colors, fields.values()
@@ -1717,6 +1761,19 @@ class Overlay(ScaledWindow):
         self.__update_draft_data()
         self.__update_overlay_callback(False)
 
+    def __browse_ml_directory(self):
+        """Open a directory browser for ML model directory"""
+        directory = filedialog.askdirectory(
+            title="Select ML Model Directory (statistical-drafting data folder)",
+            initialdir=self.configuration.settings.ml_model_directory or ".",
+        )
+        if directory:
+            self.ml_dir_entry.delete(0, tkinter.END)
+            self.ml_dir_entry.insert(0, directory)
+            self.configuration.settings.ml_model_directory = directory
+            self.ml_model_manager.set_model_directory(directory)
+            write_configuration(self.configuration)
+
     def __update_source_callback(self, *_):
         """Callback function that collects the set data a new data source is selected"""
         self.__update_settings_storage()
@@ -1916,6 +1973,9 @@ class Overlay(ScaledWindow):
             self.configuration.settings.missing_notifications_enabled = bool(
                 self.missing_notifications_checkbox_value.get()
             )
+            self.configuration.settings.ml_rating_enabled = bool(
+                self.ml_rating_checkbox_value.get()
+            )
             write_configuration(self.configuration)
         except Exception as error:
             logger.error(error)
@@ -2055,6 +2115,9 @@ class Overlay(ScaledWindow):
             )
             self.missing_notifications_checkbox_value.set(
                 self.configuration.settings.missing_notifications_enabled
+            )
+            self.ml_rating_checkbox_value.set(
+                self.configuration.settings.ml_rating_enabled
             )
         except Exception as error:
             logger.error(error)
@@ -2798,6 +2861,7 @@ class Overlay(ScaledWindow):
         self.column_5_options = None
         self.column_6_options = None
         self.column_7_options = None
+        self.ml_dir_entry = None
         popup.destroy()
 
     def __open_settings_window(self):
@@ -3023,6 +3087,37 @@ class Overlay(ScaledWindow):
                 variable=self.missing_notifications_checkbox_value,
                 onvalue=1,
                 offvalue=0,
+            )
+
+            # ML Rating settings
+            ml_rating_available = is_ml_rating_available()
+            ml_rating_label = Label(
+                popup,
+                text="Enable ML Rating:" + ("" if ml_rating_available else " (onnxruntime not installed)"),
+                style="MainSectionsBold.TLabel",
+                anchor="e",
+            )
+            ml_rating_checkbox = Checkbutton(
+                popup,
+                variable=self.ml_rating_checkbox_value,
+                onvalue=1,
+                offvalue=0,
+                state="normal" if ml_rating_available else "disabled",
+            )
+
+            ml_dir_label = Label(
+                popup,
+                text="ML Model Directory:",
+                style="MainSectionsBold.TLabel",
+                anchor="e",
+            )
+            ml_dir_frame = tkinter.Frame(popup)
+            self.ml_dir_entry = Entry(ml_dir_frame, width=20)
+            self.ml_dir_entry.insert(0, self.configuration.settings.ml_model_directory)
+            ml_dir_browse_button = Button(
+                ml_dir_frame,
+                text="Browse",
+                command=self.__browse_ml_directory,
             )
 
             self.column_2_options = OptionMenu(
@@ -3510,6 +3605,44 @@ class Overlay(ScaledWindow):
                 pady=row_padding_y,
             )
             missing_notifications_checkbox.grid(
+                row=row_count,
+                column=1,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            row_count += 1
+
+            ml_rating_label.grid(
+                row=row_count,
+                column=0,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            ml_rating_checkbox.grid(
+                row=row_count,
+                column=1,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            row_count += 1
+
+            ml_dir_label.grid(
+                row=row_count,
+                column=0,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            self.ml_dir_entry.pack(side=tkinter.LEFT, fill=tkinter.X, expand=True)
+            ml_dir_browse_button.pack(side=tkinter.RIGHT)
+            ml_dir_frame.grid(
                 row=row_count,
                 column=1,
                 columnspan=1,

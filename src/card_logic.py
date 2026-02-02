@@ -32,11 +32,12 @@ class DeckMetrics:
 class CardResult:
     """This class processes a card list and produces results based on a list of fields (i.e., ALSA, GIHWR, COLORS, etc.)"""
 
-    def __init__(self, set_metrics, tier_data, configuration, pick_number):
+    def __init__(self, set_metrics, tier_data, configuration, pick_number, ml_calculator=None):
         self.metrics = set_metrics
         self.tier_data = tier_data
         self.configuration = configuration
         self.pick_number = pick_number
+        self.ml_calculator = ml_calculator
 
     def return_results(self, card_list, colors, fields):
         """This function processes a card list and returns a list with the requested field results"""
@@ -61,6 +62,8 @@ class CardResult:
                         selected_card["results"][count] = (
                             self.__process_wheel_normalized(card, wheel_sum)
                         )
+                    elif option == constants.DATA_FIELD_ML_RATING:
+                        selected_card["results"][count] = self.__process_ml_rating(card)
                     elif option in card:
                         selected_card["results"][count] = card[option]
                     else:
@@ -109,6 +112,20 @@ class CardResult:
         except Exception as error:
             logger.error(error)
             return "NA"
+
+    def __process_ml_rating(self, card):
+        """Retrieve ML synergy rating for this card"""
+        if self.ml_calculator is None:
+            return constants.RESULT_UNKNOWN_STRING
+        try:
+            card_name = card[constants.DATA_FIELD_NAME]
+            rating = self.ml_calculator.get_rating(card_name)
+            if rating is not None:
+                return rating
+            return constants.RESULT_UNKNOWN_STRING
+        except Exception as error:
+            logger.error(error)
+            return constants.RESULT_UNKNOWN_STRING
 
     def __retrieve_wheel_sum(self, card_list):
         """Calculate the sum of all wheel percentage values for the card list"""

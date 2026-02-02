@@ -88,6 +88,8 @@ class Settings(BaseModel):
     arena_log_location: str = ""
     database_location: str = ""
     signals_enabled: bool = True
+    ml_rating_enabled: bool = False
+    ml_model_directory: str = ""
 
     @field_validator("deck_filter")
     @classmethod

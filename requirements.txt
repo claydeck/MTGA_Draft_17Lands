@@ -1,4 +1,6 @@
 numpy==2.0.0
+onnxruntime>=1.15.0
+pandas>=2.0.0
 Pillow==10.4.0
 pydantic==2.8.2
 pynput==1.7.6
