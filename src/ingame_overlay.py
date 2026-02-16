@@ -292,10 +292,10 @@ class InGameOverlay:
 
         # Calibration parameters (fraction of client area)
         feat = self.configuration.features
-        grid_left = getattr(feat, "ingame_grid_left", 0.135)
-        grid_right = getattr(feat, "ingame_grid_right", 0.865)
-        grid_top = getattr(feat, "ingame_grid_top", 0.14)
-        grid_bottom = getattr(feat, "ingame_grid_bottom", 0.78)
+        grid_left = getattr(feat, "ingame_grid_left", 0.16)
+        grid_right = getattr(feat, "ingame_grid_right", 0.826)
+        grid_top = getattr(feat, "ingame_grid_top", 0.32)
+        grid_bottom = getattr(feat, "ingame_grid_bottom", 0.654)
 
         grid_w = (grid_right - grid_left) * w
         grid_h = (grid_bottom - grid_top) * h

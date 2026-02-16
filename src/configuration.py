@@ -160,10 +160,10 @@ class Features(BaseModel):
     hotkey_enabled: bool = True
     images_enabled: bool = True
     ingame_overlay_debug: bool = False
-    ingame_grid_left: float = 0.135
-    ingame_grid_right: float = 0.865
-    ingame_grid_top: float = 0.14
-    ingame_grid_bottom: float = 0.78
+    ingame_grid_left: float = 0.16
+    ingame_grid_right: float = 0.826
+    ingame_grid_top: float = 0.32
+    ingame_grid_bottom: float = 0.654
 
 
 class CardData(BaseModel):
