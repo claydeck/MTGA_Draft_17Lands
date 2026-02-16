@@ -54,6 +54,11 @@ from src.card_logic import (
 from src.signals import SignalCalculator
 from src.ml_rating import MLModelManager, MLRatingCalculator, is_ml_rating_available
 
+if sys.platform == "win32":
+    from src.ingame_overlay import InGameOverlay
+else:
+    InGameOverlay = None
+
 try:
     import win32api
 except ImportError:
@@ -450,6 +455,7 @@ class Overlay(ScaledWindow):
         self.update_notifications_checkbox_value = tkinter.IntVar(self.root)
         self.missing_notifications_checkbox_value = tkinter.IntVar(self.root)
         self.ml_rating_checkbox_value = tkinter.IntVar(self.root)
+        self.ingame_overlay_checkbox_value = tkinter.IntVar(self.root)
 
         self.taken_type_creature_checkbox_value = tkinter.IntVar(self.root)
         self.taken_type_creature_checkbox_value.set(True)
@@ -749,6 +755,12 @@ class Overlay(ScaledWindow):
         )
         self.ml_calculator = MLRatingCalculator(self.ml_model_manager)
 
+        # Initialize in-game overlay (Windows only)
+        if InGameOverlay is not None:
+            self.ingame_overlay = InGameOverlay(self.root, self.configuration)
+        else:
+            self.ingame_overlay = None
+
         if self.notifications.check_for_updates():
             self.__arena_log_check()
             self.__control_trace(True)
@@ -768,6 +780,8 @@ class Overlay(ScaledWindow):
             logger.error(error)
 
     def close_overlay(self):
+        if self.ingame_overlay is not None:
+            self.ingame_overlay.destroy()
         if self.log_check_id is not None:
             self.root.after_cancel(self.log_check_id)
             self.log_check_id = None
@@ -1068,6 +1082,53 @@ class Overlay(ScaledWindow):
             )
         except Exception as error:
             logger.error(error)
+
+    def __update_ingame_overlay(self, pack_cards, event_set, event_type):
+        """Update the in-game rating badge overlay on top of the MTGA window."""
+        if not hasattr(self, "ingame_overlay") or self.ingame_overlay is None:
+            return
+        if not self.configuration.settings.ingame_overlay_enabled:
+            return
+
+        try:
+            # Hide during sealed
+            is_sealed = event_type in (
+                constants.LIMITED_TYPE_STRING_SEALED,
+                constants.LIMITED_TYPE_STRING_TRAD_SEALED,
+            )
+            if is_sealed or not pack_cards or not event_set:
+                logger.info("[InGameOverlay] Hiding: sealed=%s, pack_cards=%d, event_set=%s",
+                            is_sealed, len(pack_cards) if pack_cards else 0, event_set)
+                self.ingame_overlay.hide_all()
+                return
+
+            # Compute ML ratings independently of whether the ML column is visible
+            if self.configuration.settings.ml_rating_enabled:
+                taken_cards = self.draft.retrieve_taken_cards()
+                pool_names = [
+                    card.get(constants.DATA_FIELD_NAME, "")
+                    for card in taken_cards
+                    if card.get(constants.DATA_FIELD_NAME)
+                ]
+                mode = "Premier"
+                if "PickTwo" in (event_type or ""):
+                    mode = "PickTwo"
+                ratings = self.ml_calculator.compute_ratings(pool_names, event_set, mode)
+                logger.info("[InGameOverlay] Computed %d ratings for %s/%s", len(ratings), event_set, mode)
+            else:
+                ratings = self.ml_calculator._current_ratings
+                logger.info("[InGameOverlay] ML rating disabled, cached ratings: %d", len(ratings))
+
+            if not ratings:
+                logger.info("[InGameOverlay] No ratings available, hiding")
+                self.ingame_overlay.hide_all()
+                return
+
+            current_pack, current_pick = self.draft.retrieve_current_pack_and_pick()
+            logger.info("[InGameOverlay] Updating %d cards, pick %d", len(pack_cards), current_pick)
+            self.ingame_overlay.update(pack_cards, ratings, current_pick)
+        except Exception as error:
+            logger.error("In-game overlay update error: %s", error)
 
     def __update_missing_table(
         self, missing_cards, picked_cards, filtered_colors, fields
@@ -1976,6 +2037,9 @@ class Overlay(ScaledWindow):
             self.configuration.settings.ml_rating_enabled = bool(
                 self.ml_rating_checkbox_value.get()
             )
+            self.configuration.settings.ingame_overlay_enabled = bool(
+                self.ingame_overlay_checkbox_value.get()
+            )
             write_configuration(self.configuration)
         except Exception as error:
             logger.error(error)
@@ -2118,6 +2182,9 @@ class Overlay(ScaledWindow):
             )
             self.ml_rating_checkbox_value.set(
                 self.configuration.settings.ml_rating_enabled
+            )
+            self.ingame_overlay_checkbox_value.set(
+                self.configuration.settings.ingame_overlay_enabled
             )
         except Exception as error:
             logger.error(error)
@@ -2269,6 +2336,8 @@ class Overlay(ScaledWindow):
         self.__update_pack_pick_label(current_pack, current_pick)
 
         self.__update_pack_table(pack_cards, filtered, fields)
+
+        self.__update_ingame_overlay(pack_cards, event_set, event_type)
 
         self.__update_missing_table(missing_cards, picked_cards, filtered, fields)
 
@@ -3105,6 +3174,20 @@ class Overlay(ScaledWindow):
                 state="normal" if ml_rating_available else "disabled",
             )
 
+            ingame_overlay_label = Label(
+                popup,
+                text="Enable In-Game Overlay:" + ("" if sys.platform == "win32" else " (Windows only)"),
+                style="MainSectionsBold.TLabel",
+                anchor="e",
+            )
+            ingame_overlay_checkbox = Checkbutton(
+                popup,
+                variable=self.ingame_overlay_checkbox_value,
+                onvalue=1,
+                offvalue=0,
+                state="normal" if sys.platform == "win32" else "disabled",
+            )
+
             ml_dir_label = Label(
                 popup,
                 text="ML Model Directory:",
@@ -3632,6 +3715,24 @@ class Overlay(ScaledWindow):
             )
             row_count += 1
 
+            ingame_overlay_label.grid(
+                row=row_count,
+                column=0,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            ingame_overlay_checkbox.grid(
+                row=row_count,
+                column=1,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            row_count += 1
+
             ml_dir_label.grid(
                 row=row_count,
                 column=0,
@@ -4135,6 +4236,12 @@ class Overlay(ScaledWindow):
                         "w", self.__update_settings_callback
                     ),
                 ),
+                (
+                    self.ingame_overlay_checkbox_value,
+                    lambda: self.ingame_overlay_checkbox_value.trace(
+                        "w", self.__update_settings_callback
+                    ),
+                ),
             ]
 
             if enabled:
@@ -4151,6 +4258,8 @@ class Overlay(ScaledWindow):
     def __reset_draft(self, full_reset):
         """Clear all of the stored draft data (i.e., draft type, draft set, collected cards, etc.)"""
         self.draft.clear_draft(full_reset)
+        if self.ingame_overlay is not None:
+            self.ingame_overlay.hide_all()
 
     def __display_widgets(self):
         """Hide/Display widgets based on the application settings"""

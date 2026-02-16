@@ -90,6 +90,7 @@ class Settings(BaseModel):
     signals_enabled: bool = True
     ml_rating_enabled: bool = False
     ml_model_directory: str = ""
+    ingame_overlay_enabled: bool = False
 
     @field_validator("deck_filter")
     @classmethod
@@ -158,6 +159,11 @@ class Features(BaseModel):
     override_scale_factor: float = 0.0
     hotkey_enabled: bool = True
     images_enabled: bool = True
+    ingame_overlay_debug: bool = False
+    ingame_grid_left: float = 0.135
+    ingame_grid_right: float = 0.865
+    ingame_grid_top: float = 0.14
+    ingame_grid_bottom: float = 0.78
 
 
 class CardData(BaseModel):

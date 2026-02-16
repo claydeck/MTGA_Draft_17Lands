@@ -1227,6 +1227,7 @@ class ArenaScanner:
 
         return pack_cards
 
+
     def retrieve_taken_cards(self):
         """Return the card data for all of the cards that were picked during the draft"""
         taken_cards = self.set_data.get_data_by_id(self.taken_cards)
