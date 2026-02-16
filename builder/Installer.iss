@@ -22,8 +22,12 @@ Source: "..\Tools\TierScraper17Lands\src\17LandsTier.css"; DestDir: "{app}\Tools
 Source: "..\Tools\TierScraper17Lands\src\17LandsTier.js"; DestDir: "{app}\Tools\TierScraper17Lands"
 Source: "..\Tools\TierScraper17Lands\src\manifest.json"; DestDir: "{app}\Tools\TierScraper17Lands"
 Source: "..\Tools\TierScraper17Lands\README.md"; DestDir: "{app}\Tools\TierScraper17Lands"
+Source: "..\models\onnx\*.onnx"; DestDir: "{app}\models\onnx"
+Source: "..\models\cards\*.csv"; DestDir: "{app}\models\cards"
 [Icons]
 Name: "{group}\MtgaDraftTool"; Filename: "{app}\MTGA_Draft_Tool.exe"
 
 [Dirs]
 Name: {app}\Tools\TierScraper17Lands
+Name: {app}\models\onnx
+Name: {app}\models\cards

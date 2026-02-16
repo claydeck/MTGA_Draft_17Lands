@@ -1,6 +1,7 @@
 """ML Rating module - Uses ONNX models to calculate synergy-based card ratings"""
 
 import os
+import sys
 import logging
 from typing import Dict, List, Optional
 import numpy as np
@@ -20,11 +21,24 @@ def is_ml_rating_available() -> bool:
     return ONNX_AVAILABLE
 
 
+def _find_bundled_model_directory() -> str:
+    """Find the bundled models/ directory next to the executable or script."""
+    # PyInstaller: next to the exe
+    if getattr(sys, 'frozen', False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidate = os.path.join(base, "models")
+    if os.path.isdir(candidate):
+        return candidate
+    return ""
+
+
 class MLModelManager:
     """Manages ONNX model loading and caching"""
 
     def __init__(self, model_directory: str = ""):
-        self.model_directory = model_directory
+        self.model_directory = model_directory or _find_bundled_model_directory()
         self._sessions: Dict[str, ort.InferenceSession] = {} if ONNX_AVAILABLE else {}
         self._cardnames: Dict[str, List[str]] = {}
 
