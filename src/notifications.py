@@ -5,6 +5,7 @@ import tkinter.messagebox
 from datetime import datetime, date, timedelta
 from src.configuration import Configuration
 from src.app_update import AppUpdate
+from src.model_update import ModelUpdate, get_appdata_models_dir
 from src.logger import create_logger
 from src.utils import retrieve_local_set_list, read_dataset_info
 from src.configuration import write_configuration, read_configuration
@@ -27,11 +28,12 @@ except ImportError:
 logger = create_logger()
 
 NOTIFICATION_DATASET_RATE_LIMIT_SEC = 86400 # 24 hours
+NOTIFICATION_MODEL_RATE_LIMIT_SEC = 86400 # 24 hours
 NOTIFICATION_DATASET_MISSING_CHECK_LIST = [LIMITED_TYPE_STRING_DRAFT_QUICK, LIMITED_TYPE_STRING_DRAFT_BOT]
 
 class Notifications:
     """Handles app notifications"""
-    def __init__(self, root, expansions, configuration: Configuration, dataset_window: DownloadDatasetWindow):
+    def __init__(self, root, expansions, configuration: Configuration, dataset_window: DownloadDatasetWindow, ml_model_manager=None):
         self.configuration = configuration
         self.root = root
         self.new_version = ""
@@ -39,6 +41,8 @@ class Notifications:
         self.expansions = {v.set_code : k for k,v in expansions.data.items()} if expansions else None
         self.dataset_window = dataset_window
         self.update = AppUpdate()
+        self.model_update = ModelUpdate()
+        self.ml_model_manager = ml_model_manager
 
     def check_for_updates(self) -> bool:
         """Entry point for the class"""
@@ -47,6 +51,7 @@ class Notifications:
         if self.check_arena_log():
             return True
         self.check_dataset()
+        self.check_model_update()
         return True
     
     def check_and_pull_recent_sets(self):
@@ -154,6 +159,62 @@ class Notifications:
             return True
         else:
             return False
+
+    def check_model_update(self):
+        """Check if a new ML model version is available on GitHub Releases."""
+        try:
+            if not self.configuration.settings.update_notifications_enabled:
+                return
+
+            # Rate-limit: only check once per 24 hours
+            current_time = datetime.now().timestamp()
+            time_difference = current_time - self.configuration.card_data.last_model_check
+            if time_difference < NOTIFICATION_MODEL_RATE_LIMIT_SEC:
+                return
+
+            self.configuration.card_data.last_model_check = current_time
+            write_configuration(self.configuration)
+
+            result = self.model_update.check_for_update(
+                self.configuration.card_data.model_version
+            )
+            if result is None:
+                return
+
+            new_tag, download_url = result
+            message_string = (
+                f"New ML models available ({new_tag}).\n\n"
+                "Would you like to download the updated models?\n\n"
+                "This will improve card rating accuracy for recent sets."
+            )
+            if tkinter.messagebox.askyesno(
+                title="Model Update Available",
+                message=message_string,
+            ):
+                if self.model_update.download_and_install(download_url):
+                    self.configuration.card_data.model_version = new_tag
+                    write_configuration(self.configuration)
+
+                    # Hot-reload: switch to the newly downloaded models
+                    if (
+                        self.ml_model_manager is not None
+                        and not self.configuration.settings.ml_model_directory
+                    ):
+                        appdata_dir = get_appdata_models_dir()
+                        self.ml_model_manager.set_model_directory(appdata_dir)
+
+                    tkinter.messagebox.showinfo(
+                        title="Models Updated",
+                        message="ML models have been updated successfully.",
+                    )
+                else:
+                    tkinter.messagebox.showerror(
+                        title="Download Failed",
+                        message="Failed to download the model update. Please try again later.",
+                    )
+
+        except Exception as error:
+            logger.error("Model update check failed: %s", error)
 
     def check_dataset(self):
         """Check if a new version of the dataset is available."""

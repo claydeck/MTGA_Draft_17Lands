@@ -13,7 +13,7 @@ logger = create_logger()
 DOWNLOADS_FOLDER = os.path.join(os.getcwd(), "Downloads")
 
 UPDATE_LATEST_URL = (
-    "https://api.github.com/repos/unrealities/MTGA_Draft_17Lands/releases/latest"
+    "https://api.github.com/repos/im20a/MTGA_Draft_17Lands/releases/latest"
 )
 UPDATE_FILENAME = "MTGA_Draft_Tool_Setup.exe"
 

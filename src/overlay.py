@@ -734,6 +734,12 @@ class Overlay(ScaledWindow):
 
         self.root.attributes("-topmost", True)
         self.__initialize_overlay_widgets()
+        # Initialize ML Rating components
+        self.ml_model_manager = MLModelManager(
+            self.configuration.settings.ml_model_directory
+        )
+        self.ml_calculator = MLRatingCalculator(self.ml_model_manager)
+
         self.notifications = Notifications(
             self.root,
             self.limited_sets,
@@ -747,13 +753,8 @@ class Overlay(ScaledWindow):
                 False,
                 self.__update_event_files_callback,
             ),
+            ml_model_manager=self.ml_model_manager,
         )
-
-        # Initialize ML Rating components
-        self.ml_model_manager = MLModelManager(
-            self.configuration.settings.ml_model_directory
-        )
-        self.ml_calculator = MLRatingCalculator(self.ml_model_manager)
 
         # Initialize in-game overlay (Windows only)
         if InGameOverlay is not None:

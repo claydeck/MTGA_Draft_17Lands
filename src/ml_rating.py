@@ -21,6 +21,17 @@ def is_ml_rating_available() -> bool:
     return ONNX_AVAILABLE
 
 
+def _find_appdata_model_directory() -> str:
+    """Find the AppData models directory with downloaded model updates."""
+    from src.model_update import get_appdata_models_dir
+    appdata_dir = get_appdata_models_dir()
+    # Check that it actually contains model files
+    onnx_dir = os.path.join(appdata_dir, "onnx")
+    if os.path.isdir(onnx_dir) and any(f.endswith(".onnx") for f in os.listdir(onnx_dir)):
+        return appdata_dir
+    return ""
+
+
 def _find_bundled_model_directory() -> str:
     """Find the bundled models/ directory next to the executable or script."""
     # PyInstaller: next to the exe
@@ -34,11 +45,24 @@ def _find_bundled_model_directory() -> str:
     return ""
 
 
+def find_best_model_directory() -> str:
+    """Find the best available model directory.
+
+    Priority:
+    1. AppData downloaded models (if they exist)
+    2. Bundled models (fallback)
+    """
+    appdata = _find_appdata_model_directory()
+    if appdata:
+        return appdata
+    return _find_bundled_model_directory()
+
+
 class MLModelManager:
     """Manages ONNX model loading and caching"""
 
     def __init__(self, model_directory: str = ""):
-        self.model_directory = model_directory or _find_bundled_model_directory()
+        self.model_directory = model_directory or find_best_model_directory()
         self._sessions: Dict[str, ort.InferenceSession] = {} if ONNX_AVAILABLE else {}
         self._cardnames: Dict[str, List[str]] = {}
 

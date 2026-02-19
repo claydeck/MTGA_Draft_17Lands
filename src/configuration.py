@@ -173,6 +173,8 @@ class CardData(BaseModel):
     latest_dataset: str = ""
     last_check: float = 0
     last_auto_check: float = 0
+    model_version: str = ""
+    last_model_check: float = 0
 
 
 class Configuration(BaseModel):
