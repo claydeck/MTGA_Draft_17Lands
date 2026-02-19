@@ -120,27 +120,33 @@ class LimitedSets:
     def retrieve_scryfall_sets(self, retries: int = 3, wait: int = 5) -> SetDictionary:
         '''Retrieve a list of Magic sets using the Scryfall API'''
         self.sets_scryfall = SetDictionary()
+        headers = {
+            'User-Agent': f'MTGA_Draft_17Lands/{constants.APPLICATION_VERSION}',
+            'Accept': 'application/json'
+        }
 
         while retries:
             try:
                 url = "https://api.scryfall.com/sets"
+                req = urllib.request.Request(url, headers=headers)
                 url_data = urllib.request.urlopen(
-                    url, context=self.context).read()
+                    req, context=self.context).read()
                 set_json_data = json.loads(url_data)
 
                 self.__process_scryfall_sets(set_json_data["data"])
 
                 while set_json_data["has_more"]:
                     url = set_json_data["next_page"]
+                    req = urllib.request.Request(url, headers=headers)
                     url_data = urllib.request.urlopen(
-                        url, context=self.context).read()
+                        req, context=self.context).read()
                     set_json_data = json.loads(url_data)
                     self.__process_scryfall_sets(set_json_data["data"])
 
                 break
 
             except Exception as error:
-                logger.error(error)
+                logger.error(f"Error retrieving Scryfall sets: {error}")
 
             retries -= 1
 
@@ -194,7 +200,9 @@ class LimitedSets:
                     sets_to_remove.append(set_code)
 
             for set_code in sets_to_remove:
-                del self.sets_17lands.data[set_code]
+                # Add check to ensure key exists before deletion to prevent KeyError
+                if set_code in self.sets_17lands.data:
+                    del self.sets_17lands.data[set_code]
 
             success = True
         except (FileNotFoundError, json.JSONDecodeError) as error:
