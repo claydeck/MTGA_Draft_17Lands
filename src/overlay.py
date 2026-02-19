@@ -3188,15 +3188,19 @@ class Overlay(ScaledWindow):
                 state="normal" if sys.platform == "win32" else "disabled",
             )
 
+            # Show actual model directory (bundled path when user hasn't set one)
+            display_ml_dir = self.configuration.settings.ml_model_directory
+            if not display_ml_dir:
+                display_ml_dir = self.ml_model_manager.model_directory
             ml_dir_label = Label(
                 popup,
-                text="ML Model Directory:",
+                text="ML Model Directory:" + (" (built-in)" if not self.configuration.settings.ml_model_directory else ""),
                 style="MainSectionsBold.TLabel",
                 anchor="e",
             )
             ml_dir_frame = tkinter.Frame(popup)
             self.ml_dir_entry = Entry(ml_dir_frame, width=20)
-            self.ml_dir_entry.insert(0, self.configuration.settings.ml_model_directory)
+            self.ml_dir_entry.insert(0, display_ml_dir)
             ml_dir_browse_button = Button(
                 ml_dir_frame,
                 text="Browse",

@@ -248,9 +248,9 @@ class LimitedSets:
     def __append_limited_sets(self, read_sets: SetDictionary) -> SetDictionary:
         '''Create a list of sets using lists collected from 17Lands and Scryfall'''
         temp_dict = SetDictionary(version=LIMITED_SETS_VERSION)
+        alchemy_sets = {}
         if self.sets_scryfall.data and self.sets_17lands.data:
             set_codes_to_remove = []
-            alchemy_sets = {}
             # Adding the sets that have Scryfall labels
             for set_name, set_fields in self.sets_scryfall.data.items():
                 set_code = set_fields.seventeenlands[0]

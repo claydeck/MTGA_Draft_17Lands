@@ -88,9 +88,9 @@ class Settings(BaseModel):
     arena_log_location: str = ""
     database_location: str = ""
     signals_enabled: bool = True
-    ml_rating_enabled: bool = False
+    ml_rating_enabled: bool = True
     ml_model_directory: str = ""
-    ingame_overlay_enabled: bool = False
+    ingame_overlay_enabled: bool = True
 
     @field_validator("deck_filter")
     @classmethod
